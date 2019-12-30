@@ -1,5 +1,8 @@
 # Dlex
 
+[![Hex pm](http://img.shields.io/hexpm/v/dlex.svg?style=flat)](https://hex.pm/packages/dlex)
+[![CircleCI](https://circleci.com/gh/liveforeverx/dlex.svg?style=svg)](https://circleci.com/gh/liveforeverx/dlex)
+
 Dlex is a gRPC based client for the [Dgraph](https://github.com/dgraph-io/dgraph) database in Elixir.
 It uses the [DBConnection](https://hexdocs.pm/db_connection/DBConnection.html) behaviour to support
 transactions and connection pooling.
@@ -7,7 +10,7 @@ transactions and connection pooling.
 Small, efficient codebase. Aims for a full Dgraph support. Supports transactions (starting from Dgraph version: `1.0.9`),
 delete mutations and low-level parameterized queries. DSL is planned.
 
-Now supports the new dgraph 1.1.x [Type System](https://docs.dgraph.io/master/query-language/#type-system). 
+Now supports the new dgraph 1.1.x [Type System](https://docs.dgraph.io/master/query-language/#type-system).
 
 ## Installation
 
@@ -73,6 +76,15 @@ Dlex.alter(conn, [
 ```
 
 ## Developers guide
+
+### Running tests
+
+1. Install dependencies `mix deps.get`
+2. Start the local dgraph server (requires Docker) `./start-server.sh`
+   This starts a local server bound to ports 9090 (GRPC) and 8090 (HTTP)
+3. Run `mix test`
+
+NOTE: You may stop the server using `./stop-server.sh`
 
 ### By updating api.proto
 

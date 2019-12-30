@@ -4,7 +4,7 @@ defmodule Dlex.MixProject do
   def project do
     [
       app: :dlex,
-      version: "0.2.1",
+      version: "0.4.0",
       elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -23,11 +23,12 @@ defmodule Dlex.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:protobuf, "~> 0.6.3"},
       {:db_connection, "~> 2.1"},
       {:grpc, "~> 0.3.1"},
       {:jason, "~> 1.0", optional: true},
-      # {:mint, github: "ericmj/mint", branch: "master", optional: true},
-      # {:castore, "~> 0.1.0", optional: true},
+      {:mint, "~> 1.0", optional: true},
+      {:castore, "~> 0.1.4", optional: true},
       {:ecto, "~> 3.1", optional: true},
       {:earmark, "~> 1.0", only: :dev},
       {:exrun, "~> 0.1.0", only: :dev},
@@ -41,7 +42,7 @@ defmodule Dlex.MixProject do
 
   defp package do
     [
-      maintainers: ["Dmitry Russ(Aleksandrov)"],
+      maintainers: ["Dmitry Russ(Aleksandrov)", "Eric Hagman"],
       licenses: ["Apache 2.0"],
       links: %{"Github" => "https://github.com/liveforeverx/dlex"}
     ]

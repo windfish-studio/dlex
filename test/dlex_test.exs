@@ -2,10 +2,10 @@ defmodule DlexTest do
   use ExUnit.Case
 
   setup_all do
-    # {:ok, pid} = Dlex.start_link(pool_size: 2, port: 8080, transport: :http)
-    {:ok, pid} = Dlex.start_link(pool_size: 2)
-
+    # Setup our server
+    {:ok, pid} = Dlex.start_link(pool_size: 2, port: 9080)
     Dlex.alter!(pid, %{drop_all: true})
+
     schema = """
       type Client {
         name: string
@@ -22,14 +22,16 @@ defmodule DlexTest do
         name: string
         release_date: string
         starring: [CastMember]
-      }  
+      }
 
       release_date: string .
+      balance: float .
       starring: [uid] .
       email: string @index(term, hash) .
       name: string @index(term) .
       surname: string @index(term) .
     """
+
     Dlex.alter!(pid, schema)
     %{pid: pid}
   end
@@ -67,8 +69,8 @@ defmodule DlexTest do
   end
 
   test "mutation nquads", %{pid: pid} do
-    assert %{"luke" => uid_luke, "leia" => uid_leia, "sw1" => uid_sw1} = 
-      Dlex.mutate!(pid, @mutation_nquads)
+    assert %{"luke" => uid_luke, "leia" => uid_leia, "sw1" => uid_sw1} =
+             Dlex.mutate!(pid, @mutation_nquads)
 
     assert %{"name" => "Luke Skywalker"} == uid_get(pid, uid_luke)
   end
@@ -89,14 +91,10 @@ defmodule DlexTest do
     assert [
              {:ok, _},
              {:error,
-               %Dlex.Error{
+              %Dlex.Error{
                 action: :commit,
-                reason: %GRPC.RPCError{
-                  message: "Transaction has been aborted. Please retry",
-                  status: 10
-                }
-               }
-             }
+                reason: %{message: "Transaction has been aborted. Please retry"}
+              }}
            ] = results
 
     %{"balance" => balance1} = get_by_name(pid, "client1")
@@ -105,7 +103,11 @@ defmodule DlexTest do
   end
 
   test "deletion", %{pid: pid} do
-    assert %{"uid" => uid} = Dlex.mutate!(pid, %{"name" => "deletion_test", "dgraph.type" => "CastMember"}, return_json: true)
+    assert %{"uid" => uid} =
+             Dlex.mutate!(pid, %{"name" => "deletion_test", "dgraph.type" => "CastMember"},
+               return_json: true
+             )
+
     assert %{"uid" => ^uid} = get_by_name(pid, "deletion_test")
     assert Dlex.delete!(pid, %{"uid" => uid})
     assert %{"all" => []} = get_by_name(pid, "deletion_test")
@@ -129,7 +131,49 @@ defmodule DlexTest do
     assert String.contains?(error.reason.message, "Empty Argument")
   end
 
-  test "upsert", %{pid: pid} do
+  describe "upsert" do
+    setup [:upsert_schema]
+
+    test "basic", %{pid: pid} do
+      Dlex.mutate!(pid, %{
+        "name" => "upsert_test",
+        "email" => "foo@bar",
+        "dgraph.type" => "Client"
+      })
+
+      query = ~s|{ v as var(func: eq(email, "foo@bar")) }|
+
+      Dlex.mutate!(pid, %{query: query}, ~s|uid(v) <email> "foo@bar_changed" .|, return_json: true)
+
+      assert %{"email" => "foo@bar_changed"} = get_by_name(pid, "upsert_test")
+
+      query = ~s|{ v as var(func: eq(email, "foo@bar_changed")) }|
+      mutation_json = %{"uid" => "uid(v)", "email" => "foo@bar_changed2"}
+      Dlex.mutate!(pid, %{query: query}, mutation_json, return_json: true)
+      assert %{"email" => "foo@bar_changed2"} = get_by_name(pid, "upsert_test")
+    end
+
+    test "conditions", %{pid: pid} do
+      Dlex.mutate!(pid, %{
+        "name" => "upsert_test_2",
+        "email" => "foo@baz",
+        "dgraph.type" => "Client"
+      })
+
+      query = ~s|{ v as var(func: eq(email, "foo@baz")) }|
+      mutation_json = %{"uid" => "uid(v)", "email" => "foo@baz_changed"}
+
+      condition = ~s|@if(eq(len(v), 2))|
+      Dlex.mutate!(pid, %{query: query, condition: condition}, mutation_json, return_json: true)
+      assert %{"email" => "foo@baz"} = get_by_name(pid, "upsert_test_2")
+
+      condition = ~s|@if(eq(len(v), 1))|
+      Dlex.mutate!(pid, %{query: query, condition: condition}, mutation_json, return_json: true)
+      assert %{"email" => "foo@baz_changed"} = get_by_name(pid, "upsert_test_2")
+    end
+  end
+
+  defp upsert_schema(%{pid: pid} = context) do
     predicate = %{
       "upsert" => true,
       "index" => true,
@@ -139,15 +183,7 @@ defmodule DlexTest do
     }
 
     Dlex.alter!(pid, [predicate])
-    Dlex.mutate!(pid, %{"name" => "upsert_test", "email" => "foo@bar", "dgraph.type" => "Client"})
-
-    query = ~s|{ v as var(func: eq(email, "foo@bar")) }|
-    Dlex.mutate!(pid, query, ~s|uid(v) <email> "foo@bar_changed" .|, return_json: true)
-    %{"email" => "foo@bar_changed"} = get_by_name(pid, "upsert_test")
-
-    #JSON upsert not supported in dgraph 1.1.x (yet)
-    #Dlex.mutate!(pid, query, %{"uid" => "uid(v)", "email" => "foo@bar_changed2"}, return_json: true)
-    #%{"email" => "foo@bar_changed2"} = get_by_name(pid, "upsert_test")
+    context
   end
 
   def uid_get(conn, uid) do
